@@ -1,0 +1,96 @@
+import sys
+
+sys.path.append('../')
+sys.path.append('../../')
+sys.path.append('../../../')
+sys.path.append('../system/')
+sys.path.append('../sampling/')
+
+import scipy
+import scipy.linalg
+
+import inv_transform
+import particles
+import pde
+import precond
+
+a = 1
+D = 0.1
+lambd = scipy.array([a,D])
+
+Dt = 0.01
+eps = 1e-3
+
+N = 100000
+
+xL = -2.
+xR = 2.
+dx = 0.05
+grid = scipy.arange(xL+dx/2.,xR,dx)
+
+rho = scipy.ones_like(grid)/(xR-xL)
+
+# Fokker Planck for SDE
+sampler = inv_transform.Sampler()
+
+param=particles.Particles.getDefaultParameters()
+param['Dt'] = Dt
+param['N']=N
+param['restriction']=particles.KDE
+param['h']=2e-2
+param['eps']=eps
+precond_param=precond.Precond.getDefaultParameters()
+precond_param['Dstar']=0.
+precond_param['sigma']=scipy.zeros_like(grid)
+precond_param['kappa']=particles.doublewell
+param['precond']=precond.Precond(precond_param)
+
+
+fp_sde = particles.Particles(sampler,rho,grid,lambd,param)
+
+v = scipy.zeros_like(grid)
+v[10]=1.
+v[20]=-1.
+
+# testing the run
+print " run  ----"
+rho_Dt = fp_sde.integrate(rho,lambd)
+print " perturbed run ---"
+rho_Dt_pert = fp_sde.integrate(rho+eps*v,lambd)
+print "Jacobian --- "
+Jv_sde = fp_sde.applyJacobian(v)
+
+# # testing the sampler algorithm :
+# 
+# rho_Dt = scipy.zeros_like(grid)
+# rho_Dt[5:-5] = 1.
+# rho_Dt = rho_Dt/sum(rho_Dt)*(grid[1]-grid[0])
+# xx = sampler.sample_density(rho_Dt,grid,N)
+# rho_Dt_resampled = fp_sde.restrict_histogram(xx)
+
+# Corresponding PDE
+
+param=pde.FokkerPlanck.getDefaultParameters()
+param['D']=D
+param['Dt'] = Dt
+param['eps_jac']=eps
+
+
+fp_pde = pde.FokkerPlanck(param)
+
+fp_pde.initialize(rho,grid,tcur=0)
+
+# testing the run
+fp_pde.run()
+
+rho_pde = fp_pde.rho_Dt
+
+Jv_pde = fp_pde.applyJacobian(v)
+
+# testing the preconditioner
+
+A = scipy.identity(len(grid))+Dt*fp_sde.computeJacobian()
+J = fp_sde.computeJacobian()
+pJ = scipy.linalg.solve(A,v)
+
+print sum(v), sum(Jv_sde), sum(pJ) 

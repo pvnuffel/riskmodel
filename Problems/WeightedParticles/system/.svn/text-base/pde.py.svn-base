@@ -1,0 +1,97 @@
+import scipy
+import statistics
+
+HISTOGRAM = 1
+KDE = 2
+
+def doublewell(x):
+    return x-x**3   
+
+def d2udx2(u,dx):
+    u_bc=scipy.r_[u[0],u,u[-1]]
+    return 1./dx**2*(u_bc[2:]-2*u_bc[1:-1]+u_bc[:-2]) 
+
+    
+class FokkerPlanck(object):
+    """
+    Implements a particle-based time-stepper for an ensemble of particles
+    evolving according to 
+    dx = a dt + sqrt(2*D)*dW
+    
+    The corresponding Fokker-Planck is 
+    
+    rho_t + [a*(x-x**3) \rho]_x = D \rho_xx 
+    """
+    def __init__(self,param=None):
+        if param == None :
+            param = FokkerPlanck.getDefaultParameters()
+        self.param = param
+    
+    def getDefaultParameters():
+        param = {}
+        param['a']=1.
+        param['drift']=doublewell
+        param['D']=1.
+        param['dt']=1e-3
+        param['Dt']=1e-2
+        param['eps_jac']=1e-4
+        return param 
+    getDefaultParameters=staticmethod(getDefaultParameters)
+    
+    def initialize(self,rho,grid,tcur):
+        self.rho = rho
+        self.grid = grid
+        xL = 3./2.*grid[0]-1./2.*grid[1]
+        xR = 3./2.*grid[-1]-1./2.*grid[-2]
+        self.domain = scipy.array([xL,xR])
+        self.tcur = tcur
+    
+    def run(self):
+        Dt = self.param['Dt']
+        self.rho_Dt = self.simulate(self.rho)
+    
+    def simulate(self,rho0):
+        Dt = self.param['Dt']
+        # Dt needs to be a multiple of param['Dt']
+        dt = self.param['dt']
+        tstart = self.tcur
+        tcur = tstart
+        rho = scipy.array(rho0)
+        while (tcur < tstart + Dt + dt/2 ):
+            tcur += dt
+            # the process
+            rho += dt * self.rhs(rho)
+        return rho
+    
+    def rhs(self,rho):
+        grid = self.grid
+        dx = grid[1]-grid[0]
+        D = self.param['D']
+        drift = self.param['drift']
+        flux = self.flux(rho)
+        rhs = -(flux[1:]-flux[:-1])/dx+D*d2udx2(rho,dx)
+        return rhs
+
+    def flux(self,rho):
+        a = self.param['a']
+        drift = self.param['drift']
+        edges = scipy.r_[self.domain[0],(self.grid[:-1]+self.grid[1:])/2.,self.domain[-1]]
+        flux = scipy.zeros_like(edges)
+        flux[1:-1]=a*drift(edges[1:-1])*(rho[1:]+rho[:-1])/2.
+        return flux
+    
+    def applyJacobian(self,v):
+        eps = self.param['eps_jac']
+        # perturb current density
+        # note : v needs to have main zero, and rho_eps needs to integrate
+        # to 1 and remain positive !!
+        rho_pert = self.rho + eps*v
+        min_rho_pert = scipy.amin(rho_pert)
+        avg_pert = scipy.sum(v) 
+        if (min_rho_pert < 0) :
+            print "Warning : in applyJacobian : perturbation makes density negative : ", min_rho_pert
+        if (not (avg_pert == 0)):
+            print "Warning : density will not integrate to unity : ", avg_pert
+        rho_pert_Dt = self.simulate(rho_pert)
+        return (rho_pert_Dt-self.rho_Dt)/eps
+    

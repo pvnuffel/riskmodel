@@ -1,0 +1,96 @@
+import scipy
+#import tables
+from scipy.linalg import norm
+import System
+
+
+class TimestepperSystem(System.System):
+
+    def __init__(self,u,lambd,parameters=None):
+        """
+        initializes a system with the current state and parameter values
+        """
+        System.System.__init__(self,u,lambd,parameters)
+        self.Dt = parameters['Dt']
+    
+    def getDefaultParameters():
+        """
+        Returns a dictionary of default parameters 
+            eps -- 1e-6
+                the norm of the perturbation on the state
+                for the computation of matrix-vector products
+            dt  -- 1e-3
+                the time-step for the microscopic time-stepper
+            Dt  -- 5e-3
+                the time-reporting horizon for a matrix-vector product 
+        """
+        param = {}
+        param['eps'] = 1e-5
+        param['dt'] = 1e-3
+        param['Dt'] = 1e-2
+        return param
+    getDefaultParameters = staticmethod(getDefaultParameters)
+    
+    def setState(self,u,lambd):
+        """
+        This method is used to set the current system state
+        in a consistent manner
+        """
+        print "entering setState"
+        self.u = u
+        self.lambd = lambd
+        self.u_Dt = self.integrate(u,lambd)
+        print self.u_Dt
+        print "leaving setState"
+    def getResidual(self):
+        """
+        This method determines what the residual for the system is.
+        """
+        res = self.u - self.u_Dt
+        return res
+    
+    def computeJacobian(self):
+        """
+        returns the Jacobian of the system for the given state and
+        parameter vectors
+        """
+        print "ATTENTION: RUNNING COMPUTE JACOBIAN ON TIMESTEPPER SYSTEM"
+        n = len(self.u)
+        A = scipy.zeros((n,n))
+        for i in range(n):
+            e_i=scipy.zeros(n)
+            e_i[i]=1.
+            A[:,i]=self.applyJacobian(e_i)
+        return A
+    
+    def applyJacobian(self,v):
+        """
+        approximation to) (1-J)*v 
+        """
+        eps = self.param['eps']
+        u_eps = self.u + eps * v/norm(v)
+        u_eps_Dt = self.integrate(u_eps,self.lambd)
+       # result = v-(u_eps_Dt - self.u_Dt)/eps*norm(v)
+        result = (u_eps_Dt - self.u_Dt)/eps*norm(v)
+        return result   
+    
+    def getParameterDerivative(self,i):
+        """
+        This method returns the derivative with respect to parameter i
+        """
+        eps = self.param['eps']
+        pert = scipy.zeros((len(self.lambd),),scipy.float64)    
+        scipy.put(pert,i,eps)
+        lambd=self.lambd+pert
+        u_eps_Dt = self.integrate(self.u,lambd)
+        return -(u_eps_Dt-self.u_Dt)/eps
+    
+    def integrate(self,u,lambd):
+        raise NotImplementedError, "The integrate method " + \
+            "needs to be implemented for a concrete time-stepper"
+    
+    def spectrum(self):
+        A = self.computeJacobian()
+        e,v=scipy.linalg.eig(A)
+        return e
+    

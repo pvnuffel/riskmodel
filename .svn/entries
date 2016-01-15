@@ -1,0 +1,46 @@
+9
+
+dir
+529
+svn+repocs://repos.cs.kuleuven.be/repos/mMcode/traveling_wave/trunk
+svn+repocs://repos.cs.kuleuven.be/repos/mMcode
+
+
+
+2011-12-19T15:58:08.589359Z
+529
+giovanni
+has-props
+
+svn:special svn:externals svn:needs-lock
+
+
+
+
+
+
+
+
+
+
+
+e2b2e49d-caf5-0310-b210-f3d35e6903ee
+
+Utils
+dir
+
+Problems
+dir
+
+System
+dir
+
+Continuer
+dir
+
+Point
+dir
+
+Solver
+dir
+

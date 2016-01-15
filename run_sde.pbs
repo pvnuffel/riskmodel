@@ -1,0 +1,13 @@
+#!/bin/bash -l
+#PBS -l nodes=1:ppn=20
+#PBS -l walltime=23:59:59
+module load Python/2.7.6-intel-2014a 
+module load pyTables
+cd /user/leuven/313/vsc31381/fokkerplanck/Problems/WeightedParticles/checkSystem
+python check_sde_M.py
+
+ 
+
+
+
+

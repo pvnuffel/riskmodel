@@ -1,0 +1,155 @@
+9
+
+dir
+529
+svn+repocs://repos.cs.kuleuven.be/repos/mMcode/traveling_wave/trunk/Problems
+svn+repocs://repos.cs.kuleuven.be/repos/mMcode
+
+
+
+2011-12-19T15:58:08.589359Z
+529
+giovanni
+
+
+svn:special svn:externals svn:needs-lock
+
+
+
+
+
+
+
+
+
+
+
+e2b2e49d-caf5-0310-b210-f3d35e6903ee
+
+Equivalent_2D_case2
+dir
+
+Ebert_LBE
+dir
+
+Bratu_TS
+dir
+
+__init__.py
+file
+
+
+
+
+2009-01-26T10:53:59.000000Z
+d41d8cd98f00b204e9800998ecf8427e
+2008-02-06T10:48:09.447793Z
+446
+giovanni
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+0
+
+Diffusion
+dir
+
+Turning
+dir
+
+Particles
+dir
+
+LBM_RAD
+dir
+
+five_speed_in_c
+dir
+
+Krylov_on_Fisher_LBE
+dir
+
+TysonMurrayEquations
+dir
+
+Cusp
+dir
+
+Equivalent_PDE_Variable
+dir
+
+TysonMurray
+dir
+
+FokkerPl
+dir
+
+Equivalent_Ionization
+dir
+
+Fisher
+dir
+
+Krylov_on_Ebert_LBE
+dir
+
+test_five
+dir
+
+DiffusionLog
+dir
+
+five_speed_model
+dir
+
+DiffusionTS
+dir
+
+ConvDiff
+dir
+
+Ebert
+dir
+
+Fisher_LBE
+dir
+
+DiffTS_Exact
+dir
+
+BiasedRandomWalk
+dir
+
+WeightedParticles
+dir
+
+Ebert_LBE_in_c
+dir
+
+macro_precond
+dir
+
+Equivalent_PDE_Constant
+dir
+
+Equivalent_2D_case1
+dir
+

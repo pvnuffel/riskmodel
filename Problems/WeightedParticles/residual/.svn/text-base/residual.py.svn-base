@@ -1,0 +1,100 @@
+import sys
+
+sys.path.append('../')
+sys.path.append('../../')
+sys.path.append('../../../')
+sys.path.append('../system/')
+sys.path.append('../sampling/')
+
+import scipy
+import scipy.linalg
+
+import inv_transform
+import particles
+import pde
+import precond
+
+a = 1
+D = 0.1
+lambd = scipy.array([a,D])
+
+Dt = 0.05
+eps = 1e-3
+
+
+# Corresponding PDE
+
+param=pde.FokkerPlanck.getDefaultParameters()
+param['D']=D
+param['Dt'] = Dt
+param['eps_jac']=eps
+
+xL = -2.
+xR = 2.
+dx = 0.05
+grid = scipy.arange(xL+dx/2.,xR,dx)
+
+rho0 = scipy.ones_like(grid)/(xR-xL)
+rho = scipy.array(rho0)
+
+fp_pde = pde.FokkerPlanck(param)
+
+K = 50
+rho_t = scipy.zeros((len(grid),K))
+
+for k in range(K):
+    print "--"
+    print k 
+    fp_pde.initialize(rho,grid,tcur=0)
+    # testing the run
+    fp_pde.run()
+    rho = fp_pde.rho_Dt
+    if k == 0:
+        rho_pde_Dt = scipy.array(rho)
+    rho_t[:,k] = rho
+
+Nlist = scipy.array([10000,20000,50000,100000,200000,500000,700000])
+nN = len(Nlist)
+tolerance = scipy.zeros((nN,))
+tolerance0 = scipy.zeros((nN,))
+tolerance1 = scipy.zeros((nN,))
+
+for n in range(len(Nlist)):     
+    N = Nlist[n]
+
+    # Fokker Planck for SDE
+    sampler_param = inv_transform.Sampler.getDefaultParameters()
+    sampler = inv_transform.Sampler(sampler_param)
+    sampler_param = inv_transform.Sampler.getDefaultParameters()
+    sampler_param['seed']=1
+    sampler1 = inv_transform.Sampler(sampler_param)
+    sampler_param = inv_transform.Sampler.getDefaultParameters()
+    sampler_param['seed']=2
+    sampler2 = inv_transform.Sampler(sampler_param)
+
+    param=particles.Particles.getDefaultParameters()
+    param['Dt'] = Dt
+    param['N']=N
+    param['restriction']=particles.KDE
+    param['h']=2e-2
+    param['eps']=eps
+    precond_param=precond.Precond.getDefaultParameters()
+    precond_param['Dstar']=0.
+    precond_param['sigma']=1.
+    param['precond']=precond.Precond(precond_param)
+
+
+    print "running with seed 0 ?"
+    fp_sde = particles.Particles(sampler,rho,grid,lambd,param)
+    rho_Dt = fp_sde.u_Dt
+    tolerance[n] = scipy.amax(scipy.absolute(rho_Dt-rho))
+    
+    print "running with seed 1 ?" 
+    fp_sde = particles.Particles(sampler1,rho0,grid,lambd,param)
+    rho0_Dt = fp_sde.u_Dt
+    tolerance0[n] = scipy.amax(scipy.absolute(rho0_Dt-rho_pde_Dt))
+
+    print "running with seed 2 ?" 
+    fp_sde = particles.Particles(sampler2,rho0,grid,lambd,param)
+    rho1_Dt = fp_sde.u_Dt
+    tolerance1[n] = scipy.amax(scipy.absolute(rho1_Dt-rho0_Dt))

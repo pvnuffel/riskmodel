@@ -1,0 +1,310 @@
+import scipy
+import tables
+import _five_speed 
+import string
+import sys
+import math
+sys.path.append("..")
+sys.path.append("../..")
+
+import System.TimestepperSystem as TSystem
+import Utils.shift as shift
+
+from math import sqrt,exp
+
+import lbe_ionization_time_stepper
+from chapman_enskog import ChapmanEnskog
+
+import precond_ce
+
+class Ionization_five(TSystem.TimestepperSystem):
+
+    def __init__(self, u, lambd, mesh, parameters=None):
+        """
+        initializes a system with the current state and parameter values
+        Input parameters:
+        ================
+            u     : current system state as a vector
+            lambd : current parameters as a vector 
+            mesh  : the mesh on which the state is defined
+            parameters : see getDefaultParameters() for a list
+        """
+
+        self.neq=2
+        self.dx = mesh[1]-mesh[0]
+        self.N = len(mesh)
+        self.nb_calls = 0
+        self.ni=0
+    
+        if parameters == None:
+                parameters = self.getDefaultParameters()
+        
+        self.dt = parameters['dt']
+        dt = self.dt
+        self.dx = parameters['dx']
+        self.N  = parameters['N']
+        self.L = parameters['L']
+        self.Dt = parameters['Dt']
+        self.rate = parameters['rate']
+        self.nlift = parameters['nlift']
+        self.lift_type = parameters['lift_type']
+        mesh = scipy.arange(0,self.N*self.dx,self.dx)
+        self.lbe_model = lbe_ionization_time_stepper.ionization_lbe_stepper(parameters)
+        self.lbe_model.set_tau(lambd[0])
+        # ... set the electrical field at the right boundary
+        self.lbe_model.set_boundary(lambd[3])
+
+
+        # initialize with the system parameters
+        # D = lambd[0]
+        # E_at_boundary = lambd[3]
+        # rate = lambd[4]
+        _five_speed.init(lambd[0],self.dx,self.dt,lambd[4],lambd[3])
+    
+        #mesh = scipy.arange(0,self.L,self.dx)
+        self.mesh = mesh
+        self.moving = False
+        self.pdone = False
+        self.pinv_done = False
+        TSystem.TimestepperSystem.__init__(self,u,lambd,parameters)
+
+    def getDefaultParameters():
+        """
+        Returns a dictionary of default parameters 
+            eps         1e-6  
+                        the norm of the perturbation on the state for
+                        the computation of matrix-vector products 
+            dt          1e-3                        the microscopic time-step
+            Dt          1e-2
+                        the time-reporting horizon for a matrix-vector
+                        product 
+            lift_type   *'constrained'*,'slaving' or 'equi'
+
+            if lift_type == 'constrained':
+                nlift   10 
+                        the number of constrained runs steps
+    
+        """
+        param = TSystem.TimestepperSystem.getDefaultParameters()
+        param['dt'] = 1e-3
+        param['Dt'] = 1e-2        
+        param['lift_type']='constrained'
+        param['nlift']=10
+        param['precond']=precond_ce.Precond_CE()
+        return param
+    getDefaultParameters = staticmethod(getDefaultParameters)
+        
+        
+    def integrate(self,y0,lambd):
+        """ de y0 die hier binnenkomt is rho en force"""
+
+        self.ni = self.ni+1
+
+        Dt = self.param['Dt']
+        c = lambd[1]
+
+        # split in force and density       
+        force = scipy.array(y0[self.N:])
+        rho = scipy.array(y0[:self.N])
+        
+        f = self.lift(rho,force) 
+        f_init = scipy.array(f)
+    
+        # extract the parameters from lambda
+   
+        # perform time integration with the boltzmann model
+        alpha, steps = scipy.modf(Dt/self.dt)
+
+        # integrate both force and lbe for nsteps ...
+        for i in range(int(steps)):
+            f,force = _five_speed.timestep(f,force,len(force),1)
+
+        # ... and one additional step.
+        f_new,force_new= _five_speed.timestep(f,force,len(force),1)
+        
+        f = alpha*f_new+(1-alpha)*f
+        force = alpha*force_new+(1-alpha)*force
+        # and restrict
+        rho = scipy.array(f[:,0]+f[:,1]+f[:,2]+f[:,3]+f[:,4],scipy.float64)
+        u =scipy.r_[rho,force]
+        #for i in range(len(u)):
+        u = shift.shift_back_front(u,c*Dt,self.neq,self.dx)
+        return u
+
+
+    def lift(self,rho,force):
+        lift_type = self.param['lift_type']
+        # initialization in local equilibrium
+        weights=scipy.array([0.0,1.0/4.0,2.0/4.0,1.0/4.0,0.0])
+        f = scipy.zeros((self.N,len(weights)),scipy.float64)
+        for i in range(self.N):
+            for j in range(len(weights)):
+                f[i,j] = rho[i]*weights[j]
+        if lift_type == 'constrained':
+                nosteps = self.nlift
+                for i in range(nosteps):
+                    # evolve
+                    f_new,force_new = _five_speed.timestep(f,force,len(force),1)
+                    # reset density -- cfr PvL paper p 6
+                    f_new[:,len(weights)/2] = rho
+                    # loop over all speeds except the middle one
+                    for j in range(len(weights)/2):
+                        f_new[:,len(weights)/2] = f_new[:,len(weights)/2] - f_new[:,j] - f_new[:,-1-j]
+                    f = f_new
+        return f
+   
+    def computeJacobian(self):
+        return self.precond.computeJacobian(self) 
+
+<<<<<<< .mine
+=======
+        #-----------------------------------
+        #
+        # STRUCTURE OF THE MATRIX 
+        #
+        #rho_t =    c(E) \partial_x rho + D(E) \partial_xx rho  + \alpha rho   (1)
+        #  E_t   =    - rho c(E)  -  D(E)  partial_x rho               (2)
+        #
+        # The linearized equation
+        #
+        #  |  D(E) partial_xx  + c(E)*partial_x +  \alpha |  0          |
+        #  |   -c(E) - D(E)                               | - rho       |
+        #
+        #--------------------------------
+        """
+
+        y0 =self.u
+        lambd = self.lambd
+        N= self.N
+        dx  =  self.dx
+        dt = self.dt
+        Dt = self.Dt
+        neq = self.neq
+        nsteps = self.Dt
+        rho = y0[:N]
+        force = y0[N:]
+    
+        rate = self.rate 
+        reactionmatrix = scipy.array([[-rate,0,0,0,0],\
+            [rate*sqrt(1.0),0,0,0, rate*sqrt(1.0)],\
+            [0*rate,0,0,0,0*rate],\
+            [rate*sqrt(1.0),0,0,0,rate*sqrt(1.0)],
+            [0,0,0,0,-rate]])
+        weights = self.lbe_model.weights
+        speed = self.lbe_model.speed
+        
+        K     = self.lbe_model.kracht_matrix(weights,speed)
+        alpha = scipy.array(force)*0.0
+        D     = scipy.array(force)*0.0
+        c     = scipy.array(force)*0.0
+        for i in range(len(force)):
+            R = dt*reactionmatrix + (-force[i]*dt/(self.lbe_model.tau*dx))*K
+            f = ChapmanEnskog(speed,R,weights,self.lbe_model.tau,dx,dt)
+            c[i],D[i],alpha[i] = f.get_transport_coeff()
+
+        D = -D
+        c = -c
+        alpha = alpha/self.dt
+        
+        J=scipy.zeros((2*N,2*N),scipy.float64)
+        
+        J[0,0]=-D[0]/(dx*dx) - c[0]/dx + alpha[0]
+        J[0,1]=D[0]/(dx*dx) + c[0]/dx
+
+        #links onderblok
+        J[N,0]=-c[0] + D[0]/dx
+        J[N,1]=-D[0]/dx
+        #rechts onderblok
+        J[N,N]=-rho[0]
+        
+        for i in range(1,N-1):
+                # linksboven
+                # 
+                #  D(E) partial_xx  + c(E) partial_x  +  alpha(E)
+                #
+                J[i,i-1] =D[i]/(dx*dx)     -(c[i])/(2*dx) 
+                J[i,i]   =-2*D[i]/(dx*dx)               + alpha[i]
+                J[i,i+1] =D[i]/(dx*dx)     +(c[i])/(2*dx)
+                # rechtsboven
+                #  0 
+                #    
+
+                # linksonder
+                #
+                #          -c(E) - D partial x
+                #
+                J[N+i,i-1] = D[i]/(2*dx)
+                J[N+i,i]   = -c[i]
+                J[N+i,i+1] = -D[i]/(2*dx)
+                # rechtsonder
+                #
+                #  - rho  
+                #
+                #
+                J[N+i,N+i]= -rho[i] 
+                
+        # i = N-1
+        # linksboven
+        J[N-1,N-2]=D[-1]/(dx*dx)+c[-1]/dx
+        J[N-1,N-1]=-2*D[-1]/(dx*dx) -c[-1]/dx + alpha[-1] 
+        # rechtsboven
+        J[2*N-1,N-2]=  D[-1]/(dx)
+        J[2*N-1,N-1]= -c[-1] - D[0]/dx
+        # rechtsonder
+        J[2*N-1,2*N-1]=-dt*rho[-1]
+        
+       
+        
+        # Dit moet er altijd bij ook met shift back.
+        #
+        #
+        #if self.moving:
+        mu = lambd[1]/(2*dx)
+        shift_M = scipy.array(J)*0.0
+        for i in range(N-1):
+            shift_M[i,i+1] =-mu
+            shift_M[i+1,i] = mu
+            shift_M[N+i,N+i+1] = -mu
+            shift_M[N+i+1,N+i] = mu
+
+        # this is causing a bug.  I have to remove dt
+        # J = (J - shift_M)/dt
+        J = (J - shift_M)
+      #  I = scipy.identity(neq*N)
+      #  return I-scipy.linalg.inv(I-Dt*J)
+        return Dt * J
+
+
+>>>>>>> .r417
+    def getHDF5Description(self):
+        u_shape = scipy.shape(self.u)
+        mesh_shape = scipy.shape(self.mesh)
+        lambd_shape = scipy.shape(self.lambd)
+        class TSystemSave(tables.IsDescription):
+            u = tables.FloatCol(shape = u_shape)
+            mesh = tables.FloatCol(shape = mesh_shape)
+            lambd = tables.FloatCol(shape = lambd_shape)
+            dt = tables.FloatCol()
+            Dt = tables.FloatCol()
+            eps = tables.FloatCol()
+            dx = tables.FloatCol()
+        return TSystemSave
+
+    def save(self,file,group,table):
+        h5file = tables.openFile(file,mode="a")
+        table = self.getTable(h5file,group,table)
+        point=table.row
+        point['u']=self.u
+        point['lambd']=self.lambd
+        point['dt']=self.dt
+        point['Dt']=self.param['Dt']
+        point['eps']=self.param['eps']
+        point['dx']=self.dx
+        point['mesh']=self.mesh
+        point.append()
+        table.flush()
+        h5file.close()
+    
+  
+
+

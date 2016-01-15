@@ -1,0 +1,60 @@
+import scipy
+
+import sys         
+sys.path.append('../')   #added to resolve importerror of nephew-directories
+sys.path.append('../../')
+sys.path.append('../../../')
+
+import System.TimestepperSystem as TSystem
+
+def doublewell(x):
+    return x-x**3   
+
+def d2udx2(u,dx):
+    u_bc=scipy.r_[u[0],u,u[-1]]
+    return 1./dx**2*(u_bc[2:]-2*u_bc[1:-1]+u_bc[:-2]) 
+
+    
+class FokkerPlanck(TSystem.TimestepperSystem):
+    """
+    Implements a PDE based time-stepper for the PDE
+    
+    rho_t + [a*(x-x**3) \rho]_x = D \rho_xx 
+    """
+    def __init__(self,rho,grid,drift,lambd,param=None):
+        self.grid = grid
+        xL = 3./2.*grid[0]-1./2.*grid[1]
+        xR = 3./2.*grid[-1]-1./2.*grid[-2]
+        self.domain = scipy.array([xL,xR])
+        self.drift = drift
+        if param == None :
+            param = FokkerPlanck.getDefaultParameters()
+        self.param = param
+        TSystem.TimestepperSystem.__init__(self,rho,lambd,param)
+        
+    def integrate(self,rho0,lambd):
+        Dt = self.param['Dt']
+        # Dt needs to be a multiple of param['Dt']
+        dt = self.param['dt']
+        tcur = 0.
+        rho = scipy.array(rho0)
+        while (tcur < Dt + dt/2 ):
+            tcur += dt
+            # the process
+            rho += dt * self.rhs(rho,lambd)
+        return rho
+    
+    def rhs(self,rho,lambd):
+        grid = self.grid
+        dx = grid[1]-grid[0]
+        D = lambd[1]
+        a = lambd[0]
+        flux = self.flux(rho)
+        rhs = -a*(flux[1:]-flux[:-1])/dx+D*d2udx2(rho,dx)
+        return rhs
+
+    def flux(self,rho):
+        edges = scipy.r_[self.domain[0],(self.grid[:-1]+self.grid[1:])/2.,self.domain[-1]]
+        flux = scipy.zeros_like(edges)
+        flux[1:-1]=self.drift(edges[1:-1])*(rho[1:]+rho[:-1])/2.
+        return flux

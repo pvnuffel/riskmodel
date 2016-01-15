@@ -1,0 +1,93 @@
+import scipy
+import string
+import sys
+sys.path.append("..")
+sys.path.append("../..")
+import Point.Point as Point
+import Solver.NewtonSolver as NewtonSolver
+import Solver.GMRESLinearSolver as GMRES
+import Solver.ImplicitEulerDirectLinearSolver as Direct
+import Solver.IdentityLinearSolver as Identity
+import Utils.conditions.artificial as artificial
+import ionization_five
+import precond_ce
+from math import sqrt
+
+if __name__=="__main__":
+
+    speed = scipy.array([-2,-1,0,1,2])
+    weights = scipy.array([0,1.0/4.0,2.0/4.0,1.0/4.0,0.0])
+
+    dt = 4e-3
+    dx = 1.6e-1
+
+    L = 400.
+    N = int(L/dx)
+    mesh = scipy.arange(0,N*dx,dx)
+    rho = 0.025/(1+scipy.exp(0.15*(mesh-2*L/3.)))
+    force = 1/(1+scipy.exp(0.05*(mesh-5*L/9.)))-1
+    state = scipy.r_[rho,force]
+
+    print "dx: ", dx, " dt : ", dt
+    print "N : ", N , "len state: ", len(state)
+    
+    # physical parameters
+
+    c =  1.40
+   
+    # CREATING THE SYSTEM OBJECT
+    # Changing the default parameters
+    param = ionization_five.Ionization_five.getDefaultParameters()
+    param['speed'] = speed
+    param['weights'] = weights
+    param['boundaries']="noflux"
+    rate = 100.0
+    param['rate'] = rate
+    param['eps'] = 1e-8	
+    param['dt'] = dt
+    param['dx'] = dx
+    param['N'] = N
+    param['L'] = N*dx
+    param['Dt'] = 25 * dt
+    param['nlift'] = 25
+    precond = precond_ce.Precond_CE()
+    param['precond']=precond
+   
+    D = 1.0 
+    lambd = scipy.array([D,c,0.,-1.0,rate])
+    ion = ionization_five.Ionization_five(state,lambd,mesh,param)
+    print "tau: ", ion.lbe_model.tau, "omega: ", 1/ion.lbe_model.tau
+    print "c : ", c
+
+    # precond
+    precond = Direct.ImplicitEulerDirectLinearSolver()
+    #precond = Identity.Identity()
+
+    # CREATING LINEAR SOLVER
+    gmres_param = GMRES.GMRESLinearSolver.getDefaultParameters()
+    gmres_param['tol']=1e-12
+    gmres_param['rel_tol']=0.99
+    gmres_param['relative']=True
+    gmres_param['flexible']=False
+    gmres_param['builtin']=False
+
+    gmres_param['print']='short'
+    linsolv = GMRES.GMRESLinearSolver(gmres_param)
+
+    # CREATING NEWTON SOLVER
+    newt_param = NewtonSolver.NewtonSolver.getDefaultParameters()
+    newt_param['rel_tol']=1e-40
+    newt_param['abs_tol']=1e-12
+    newt_param['print']='short'
+    nsolv = NewtonSolver.NewtonSolver(linsolv,newt_param)
+
+    # CREATING POINT
+    point_param = Point.Point.getDefaultParameters()
+    point_param['artificial']=[2]
+    point_param['artificial_condition']=[artificial.condition]
+
+    p = Point.Point(ion,nsolv,precond,point_param)
+    p.correct()
+    u,lam =p.getState()
+    for i in range(N):
+	print i,u[i],u[N+i]

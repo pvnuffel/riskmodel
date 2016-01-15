@@ -1,0 +1,4 @@
+#!/bin/bash -l
+module load python
+cd $PBS_O_WORKDIR
+python checksystem.py

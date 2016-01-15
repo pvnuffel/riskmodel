@@ -1,0 +1,207 @@
+import scipy
+from scipy.linalg import norm
+from scipy import sqrt
+
+import sys         
+sys.path.append('../')   #added to resolve importerror of nephew-directories
+sys.path.append('../../')
+sys.path.append('../../../')
+
+import System.TimestepperSystem as TSystem
+
+def create_doublewell(alpha,beta):
+    def doublewell(x):
+        return -4*x**3+3*(alpha+beta)*x**2-2*alpha*beta*x
+    return doublewell
+
+class Particles(TSystem.TimestepperSystem):
+    """
+    Implements a particle-based time-stepper for an ensemble of particles
+    evolving according to 
+    dx = a dt + sqrt(2*D)*dW
+    
+    The corresponding Fokker-Planck is 
+    
+    rho_t + [a*(x-x**3) \rho]_x = D \rho_xx 
+    """
+    def __init__(self,lifting,restriction,rho,grid,lambd,control=None,param=None):
+        if param == None :
+            param = Particles.getDefaultParameters()
+        self.param = param
+        self.drift=create_doublewell(alpha=lambd[2],beta=lambd[3])
+        self.control= control
+        if control == None:
+            self.N=param['Nlarge']
+            self.skip=1
+        else:
+            self.N=param['Nsmall']
+            self.skip = param['Nlarge']/param['Nsmall']
+        self.grid = grid
+        # grid points are cell centers
+        xL = 3./2.*grid[0]-1./2.*grid[1]
+        xR = 3./2.*grid[-1]-1./2.*grid[-2]
+        self.domain = scipy.array([xL,xR])
+        self.lifting = lifting
+        self.restriction = restriction
+        self.neq = 1
+        self.rand=scipy.random.mtrand.RandomState()
+        self.precond = param['precond']
+        self.precond.system = self
+        self.Dt = param['Dt']
+        TSystem.TimestepperSystem.__init__(self,rho,lambd,param)
+    
+    def getDefaultParameters():
+        param = {}
+        param['Nlarge']=1000000
+        param['Nsmall']=10000
+        param['dt']=1e-3
+        param['Dt']=1e-2
+        param['seed']=0
+        param['eps']=1e-5
+        return param 
+    getDefaultParameters=staticmethod(getDefaultParameters)
+    
+    def seed_particle(self,s):
+        self.rand.seed(s)
+    
+    def setState(self,u,lambd):
+        self.u = u
+        self.lambd = lambd
+        self.x,self.x_Dt,self.u_Dt = self.integrate(u,lambd)
+        self.setBins()
+    
+    def integrate(self,rho,lambd):
+        # lambd = [a,D]
+        x,seed = self.lift(rho)
+        print "nb particles : ", len(x)
+        x_Dt = self.simulate(x,seed,lambd)
+        return x,x_Dt,self.restrict(x_Dt)
+    
+    def lift(self,rho):
+        grid = self.grid
+        x = self.lifting.lift(rho,grid,self.param['Nlarge'],self.skip)
+        return x
+    
+    def simulate(self,x0,seed,lambd):
+        print "in simulate : ", lambd
+        x_Dt = scipy.zeros_like(x0)
+        for i in range(len(x0)):
+            x_Dt[i]=self.simulate_particle(x0[i],seed[i],lambd)
+        return x_Dt
+    
+    def simulate_particle(self,x,seed,lambd):
+        tstart = 0
+        tcur = tstart
+        Dt = self.param['Dt']
+        # Dt needs to be a multiple of param['Dt']
+        dt = self.param['dt']
+        D = lambd[1]
+        a = lambd[0]
+        self.seed_particle(seed)
+        while (tcur < tstart + Dt - dt/2 ):
+            tcur += dt
+            # the random number
+            dW = self.getBrownianIncrement()
+            # the process
+            drift_term = a * self.drift(x)
+            x=x+drift_term*dt+sqrt(2*D*dt)*dW
+            # and reflecting boundary conditions
+            if (x>self.domain[1]):
+                x = 2*self.domain[1]-x
+            if (x<self.domain[0]):
+                x = 2*self.domain[0]-x
+        return x
+    
+    def getBrownianIncrement(self):
+        dW=self.rand.normal(loc=0.,scale=1.)
+        return dW
+    
+    def restrict(self,x):
+        return self.restriction.restrict(x,self.grid,self.domain)
+    
+    def setBins(self):
+        self.bin = self.restriction.getBins(self.x,self.grid,self.domain)
+    
+    def computeJacobian(self,precond=True):
+        if precond:
+            dx = self.grid[1]-self.grid[0]
+            N = len(self.u)
+            return self.precond.computeJacobian(N,dx) 
+        else:
+            return TSystem.TimestepperSystem.computeJacobian(self)
+    
+    def applyJacobian(self,v):
+        eps = self.param['eps']
+        # compute weights per bin for perturbation 
+        # w = 1 + eps * v/rho
+        w_bin = 1. + eps * v/norm(v)/self.u
+        # transform to weights per particle
+        w_part = w_bin[self.bin]
+        total = scipy.sum(w_part)/self.N
+        # note that the perturbed state is no longer a probability distribution
+        # so norming the histograms is not entirely correct
+        u_eps_Dt = total*self.restriction.restrict(self.x_Dt,self.grid,self.domain,w=w_part)
+        result = v-(u_eps_Dt - self.u_Dt)/eps*norm(v)
+        control = self.controlJacobian(v)
+        return result + control      
+    
+    def testJacobian(self,v):
+        eps = self.param['eps']
+        # compute weights per bin for perturbation 
+        # w = 1 + eps * v/rho
+        w_bin = 1. + eps * v/norm(v)/self.u
+        # transform to weights per particle
+        w_part = w_bin[self.bin]
+        total = scipy.sum(w_part)/self.N
+        # note that the perturbed state is no longer a probability distribution
+        # so norming the histograms is not entirely correct
+        u_eps_Dt = total*self.restriction.restrict(self.x_Dt,self.grid,self.domain,w=w_part)
+        result = v-(u_eps_Dt - self.u_Dt)/eps*norm(v)
+        control = self.controlJacobian(v)
+        return result + control,result,control     
+    
+    def controlJacobian(self,v):
+        eps = self.param['eps']
+        # compute weights per bin for perturbation 
+        # w = 1 + eps * v/rho
+        w_bin = 1. + eps * v/norm(v)/self.u
+        # transform to weights per particle
+        w_part = w_bin[self.bin]
+        total = scipy.sum(w_part)/self.N
+        # note that the perturbed state is no longer a probability distribution
+        # so norming the histograms is not entirely correct
+        u_eps_Dt = total*self.restriction.restrict(self.x_Dt,self.grid,self.domain,w=w_part)
+        c = self.control
+        # print "self.control", c,
+        # print self.lambd
+        if c==None:
+            print "no control variable ..."
+            control = scipy.zeros_like(v)
+        else: 
+            print "control variable ..."
+            eps = self.param['eps']
+            skip = self.skip
+            Nlarge = self.param['Nlarge']
+            Nsmall = self.param['Nsmall']
+            w_part_large = scipy.ones_like(c.x)
+            w_part_small = scipy.ones_like(self.x)
+            w_bin_eps = 1. + eps * v/norm(v)/c.u
+            w_eps_part_large = w_bin[c.bin]
+            w_eps_part_small = w_bin[c.bin[skip/2:Nlarge:skip]]
+            total_large = scipy.sum(w_part_large)/Nlarge
+            total_small = scipy.sum(w_part_small)/Nsmall
+            u_Dt_large = total_large*self.restriction.restrict(\
+                c.x_Dt,c.grid,c.domain,w=w_part_large)
+            u_eps_Dt_large = total_large*self.restriction.restrict(\
+                c.x_Dt,c.grid,c.domain,w=w_eps_part_large)
+            control_large = u_eps_Dt_large - u_Dt_large
+            u_Dt_small = total_small*self.restriction.restrict(\
+                c.x_Dt[skip/2:Nlarge:skip],c.grid,c.domain,w=w_part_small)
+            u_eps_Dt_small = total_small*self.restriction.restrict(\
+                c.x_Dt[skip/2:Nlarge:skip],c.grid,c.domain,w=w_eps_part_small)
+            control_small = (u_eps_Dt_small - u_Dt_small)
+            control = (control_small - control_large)/eps*norm(v)
+        return control      
+
+    
+    
