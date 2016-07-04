@@ -60,6 +60,7 @@ class Continuer(object):
         ploty = {}
         ploty['field'] = 'u'
         ploty['func'] = 'norm'
+        param['add_failures'] = False
         param['ploty']=ploty
 
         param['growth_factor']=1.2
@@ -150,6 +151,59 @@ class Continuer(object):
             successful = new_success
         succ = tries - fail
         return succ,fail,rjct
+        
+        
+    def bcontinue_natural (self,nb_points):
+        """ 
+        performs a continuation for this branch, adding nb_points
+        points (or less, if there are failed Newton iterations)
+        """
+        # internal parameters        
+        tries = 0
+        fail = 0
+        rjct = 0
+        successful = True
+        kontinue = True
+        bound = False
+        lambd_step = scipy.zeros_like(self.points[-1].lambd)
+        cont_step = self.param['cont_step']
+        bifpar_index = self.param['plotx']['func']
+     #   bifpar_index = self.param['bifpar_index']
+        lambd_step[bifpar_index] = cont_step       #Insert the index of the prefered bifurcation parameter
+        growth = self.param['growth_factor']
+    
+        l = len(self.points)
+        if l < 1:
+            raise ValueError, "There should be one point in the branch"
+        while kontinue and tries < nb_points:
+            print 'Continuation try number ' , tries
+            tries +=1
+            l = len(self.points)
+            last_point = self.points[-1]        
+            new_point = last_point.copy()
+            new_point.lambd= new_point.lambd + lambd_step
+            new_point.updateState()
+          #  print 'State after Cont Update ', new_point.getState()
+            status = new_point.correct()
+            print 'status  =', status
+            if status == 0:
+                new_success = True
+            else: 
+                new_success = False
+                           
+            if not new_success :
+                fail += 1
+                add_failed_points= self.param['add_failures']
+                if (add_failed_points == True):
+                    self.addPoint(new_point)
+    
+            else :  # if new_success
+    #                for i in range ( len(self.points)):
+    #                    print 'lambdas =' , self.points[i].lambd[0]
+                self.addPoint(new_point)
+    
+        succ = tries - fail
+        return succ
 
     def boundCrossed(self,point):
         bound = False
@@ -174,8 +228,17 @@ class Continuer(object):
             y[i] = self.get(self.points[i],"y")
             print x[i],y[i]
         return x,y
+        
+    def getIterations(self):
+        N_iter = scipy.zeros((len(self.points)))
+
+        for i in range(len(self.points)):
+            N_iter[i] = self.points[i].iterations
+        return N_iter
 
     def get(self,point,option):
+        grid = point.system.grid
+        dx=1e-2  #change this, later
         if option == "x":
             plt = self.param['plotx']
         elif option == "y":
@@ -190,6 +253,8 @@ class Continuer(object):
             return field[func]
         elif func == "norm":
             return scipy.linalg.norm(field)
+        elif func == "mean":
+            return scipy.dot(field, grid)*dx
 
     def save(self,file,group,table):
         for p in self.points:

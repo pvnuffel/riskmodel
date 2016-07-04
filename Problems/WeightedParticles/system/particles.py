@@ -10,7 +10,7 @@ sys.path.append('../../../')
 
 import System.TimestepperSystem as TSystem
 
-def create_doublewell(alpha,beta):
+def create_doublewell():
     def doublewell(x):
        # return -4*x**3+3*(alpha+beta)*x**2-2*alpha*beta*x
       #  return 2*x-4*x**3  
@@ -32,7 +32,7 @@ class Particles(TSystem.TimestepperSystem):
         if param == None :
             param = Particles.getDefaultParameters()
         self.param = param
-        self.drift=create_doublewell(alpha=lambd[2],beta=lambd[3])
+        self.drift=create_doublewell()
         self.control= control
 #        if control == None:
 #            self.N=param['Nlarge']
@@ -183,8 +183,6 @@ class Particles(TSystem.TimestepperSystem):
             x_mean[tcur]= mean(x) 
         return x, x_mean
 #    
-#    
-#    
     def getBrownianIncrement(self):
         dW=self.rand.normal(loc=0.,scale=1.)
         return dW
@@ -257,7 +255,7 @@ class Particles(TSystem.TimestepperSystem):
         # so norming the histograms is not entirely correct
         self.x_Dt
     #    print 'Len x', len(self.x_Dt)
-        u_eps_Dt = total*self.restriction.restrict(self.x_Dt,self.grid,self.domain,w=w_part) 
+        u_eps_Dt = self.restriction.restrict(self.x_Dt,self.grid,self.domain,w=w_part) 
         #the difference between U_eps_Dt and U_Dt is w_part (they use the same x_Dt)
       #  Jv = v-(u_eps_Dt -self.u_Dt)/eps*norm(v)
         Jv = (u_eps_Dt -self.u_Dt)/eps*norm(v)

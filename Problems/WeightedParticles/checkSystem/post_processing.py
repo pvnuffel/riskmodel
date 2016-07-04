@@ -30,7 +30,7 @@ def get_fixpoint( mu, sigma, alpha):
 if __name__=="__main__":
     
     sigma=1.
-    mu = 0.1
+    mu = 1
     alpha= 5.
 
     xi_abs= get_fixpoint( mu, sigma, alpha)
@@ -69,17 +69,23 @@ if __name__=="__main__":
     rho_ss_alpha5 =np.loadtxt('pfix_alpha5.txt')
     xmean_alpha5 = np.dot(grid,rho_ss_alpha5)*dx
     plt.axvline(xmean_alpha1, linewidth=2)
-    plt.axvline( get_fixpoint( mu, sigma, 1), color='red',  linestyle='--', linewidth=2)
-    plt.plot(grid, rho_ss_alpha1)
+    plot_anal =plt.axvline( get_fixpoint( mu, sigma, 1), color='red',  linestyle='--', linewidth=2, label =  r'${\bar{x}}_{analytical}$')
+
+    plot_stable = plt.plot(grid, rho_ss_alpha1, label = r'${\rho^*}_{stable}$')
     plt.axvline(xmean_alpha5, color='green', linewidth=2)
     plt.axvline( -get_fixpoint( mu, sigma, 5), color='red',  linestyle='--', linewidth=2)
     plt.xlabel('$x$', fontsize = 16)
     plt.ylabel(r'$\rho*$', fontsize = 18)
     delta_x_alpha1 = np.abs(xmean_alpha1- get_fixpoint( mu, sigma, 1))
     delta_x_alpha5  =  np.abs(xmean_alpha5 + xi_abs)
-    plt.title( r'$\Delta \bar{x} (\alpha=5) =%.3f}$    ' %delta_x_alpha5 + r'$\Delta \bar{x} (\alpha=1) =%.3f}$' %delta_x_alpha1 , fontsize=17)
-    plt.plot(grid, rho_ss_alpha5) 
-    plt.savefig('plots/steady_states.pdf')
+    plt.title( r'$\Delta \bar{x} (\alpha=5) =%.3f}$    ' %delta_x_alpha5 + r'$\Delta \bar{x} (\alpha=1) =%.3f}$' %delta_x_alpha1 , fontsize=11)
+    plot_meta= plt.plot(grid, rho_ss_alpha5, label = r'${\rho^*}_{metastable}$')
+    plt.legend([plot_anal, plot_meta, plot_stable], loc='best')
+
+   # plt.legend(bbox_to_anchor=(1, 1), numpoints = 1 )
+    plt.legend(loc=0, prop={'size':11}) #fontsize = 'x-small')
+    plt.gca().set_ylim([0, 1.5])   
+ #   plt.savefig('plots/steady_states.pdf')
     plt.show()    
     
     

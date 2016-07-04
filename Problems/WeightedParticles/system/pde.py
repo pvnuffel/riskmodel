@@ -50,7 +50,7 @@ class FokkerPlanck(TSystem.TimestepperSystem):
         dt = self.param['dt']
         tcur = 0.
         rho = scipy.array(rho0)
-        plot_rho_dt = False
+        plot_rho_dt = True
         n_steps = int(Dt/dt)
         for tcur in range(0, n_steps):
             rho = rho + dt*self.rhs(rho,lambd)
@@ -90,14 +90,15 @@ class FokkerPlanck(TSystem.TimestepperSystem):
         D = lambd[1]
         a =lambd[0]
         dx = self.grid[1]-self.grid[0]
-        norm = sum( np.exp(-self.grid**4 + self.grid**2 )*a/(D))*dx
+        norm = sum( np.exp((-self.grid**4 + self.grid**2 )*a/D))*dx
    #         norm = quad(lambda x: np.exp(-( x**4 -x**2)*a/D ), -np.inf, np.inf)  #gives same_result
         rho_ss = np.exp( (-self.grid**4 + self.grid**2 )*a/D)/norm
-        label2= r'$\frac{ \exp{\left[-\frac{V(x)}{\sigma^2}\right]}}{N}$'
+        label2= r'$\frac{ \exp{\left[-\frac{V(x)}{\sigma^2}\right]}}{\mathcal{N}}$'
         plot_rho = plt.plot(self.grid, rho_ss, label=label2)
-        plt.legend(prop={'size':0.5})
+        plt.legend(prop={'size':0.1})
         plt.legend([plot_rho], loc='best')
         plt.legend(bbox_to_anchor=(1, 1), numpoints = 1 )
         plt.savefig('movieplots/plot_rho_t%.5d.jpg' %tcur, dpi=500)
+        #plt.savefig('movieplots/plot_rho_t%.5d.pdf' %tcur)
         plt.close()      
     

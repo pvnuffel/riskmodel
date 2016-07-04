@@ -1,6 +1,7 @@
 import scipy
 import Solver
 import LinearSolver
+from scipy import zeros,dot,r_
 
 class NewtonSolver(Solver.Solver):
 
@@ -26,7 +27,18 @@ class NewtonSolver(Solver.Solver):
         else:
             raise TypeError, "input argument " + linear_solver \
                 + " should be a linear solver"
-        self.nb_newt = 0
+        self.nb_newt = 0 
+        self.resid = zeros((0,))
+        self.newton_states = zeros((0,))
+        self.newton_res_norm = zeros(0,)
+       
+#    def createCallback(self):
+#        def callback(res, x_new):
+#            self.resid = r_[self.resid,res]
+#          #  self.x = r_[self.x,x_new]
+#            if self.param['print']=='short':
+#                print "Newton residual: ", len(self.resid), res
+#        self.callback=callback
     
     def getDefaultParameters():
         """  
@@ -49,7 +61,9 @@ class NewtonSolver(Solver.Solver):
         param['stop']="res"
         return param
     getDefaultParameters = staticmethod(getDefaultParameters)
-        
+    
+
+
     def solve(self):
         """
         Perform Newton iterations, starting from x0.  
@@ -66,22 +80,28 @@ class NewtonSolver(Solver.Solver):
         print_it = self.param['print']
         alpha = self.param['damping']
         stop = self.param['stop']
-        
-        res = self.point.getResidual()
         x = self.point.getCurrentGuess()
-        res_norm = scipy.linalg.norm(res)
+        self.newton_states = x
+        res = self.point.getResidual()
+        res_norm = scipy.linalg.norm(res)/len(res)
+        print 'res norm init ', self.newton_res_norm
+        self.newton_res_norm  =res_norm
+        grid = self.point.system.grid
+        grid_dx = grid[-1] - grid[-2]
         if stop == "step":
             stop_norm = 0
         elif stop == "res":
             stop_norm = res_norm
             
-        while iter==0 or (iter < max_iter and stop_norm > abs_tol):
+        while (iter < max_iter and stop_norm > abs_tol):
 
             iter += 1
             self.nb_newt += 1
-            dx, status = self.linsolv.solve(-res)        #res= u- u.Dt = F(u)
+            dx, status = self.linsolv.solve(-res)
+            
             step_norm = scipy.linalg.norm(dx)
             step_avg = scipy.sum(dx)
+            
             # Handling of errors and printing
             if not status == 0:
                 print "An error has occurred in solving " +\
@@ -111,20 +131,26 @@ class NewtonSolver(Solver.Solver):
                 print "---------------------"
                 
             x=x+alpha*dx
+          #  x = x/(sum(x)*grid_dx)
+            self.newton_states = r_[self.newton_states,x]
             self.point.setCurrentGuess(x)                          
             res = self.point.getResidual()
             res_norm = scipy.linalg.norm(res)/len(res)
+            self.newton_res_norm = r_[self.newton_res_norm,res_norm]
             if stop == "step":
                 stop_norm = scipy.linalg.norm(dx)
             elif stop == "res":
-                stop_norm = scipy.linalg.norm(res)
+                stop_norm = res_norm
         if not print_it == 'none':
             print "Newton: final residual : ", res_norm
+        #self.iterations = iter
+        #self.point.iterations=iter
         if iter == max_iter:
             status = 1
         else:
             status = 0
         return status
+        
 
     def setPoint(self,point):
         self.linsolv.setPoint(point)

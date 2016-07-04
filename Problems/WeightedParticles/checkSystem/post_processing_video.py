@@ -29,7 +29,7 @@ files=[]
 # filename for the name of the resulting movie
 filename = 'animation'
 
-os.system("mencoder 'mf://movieplots/*.jpg' -mf type=jpg:fps=30 -ovc lavc  -lavcopts vcodec=wmv2 -oac copy -o output.avi")
+os.system("mencoder 'mf://movieplots/*.jpg' -mf type=jpg:fps=30 -ovc lavc  -lavcopts vcodec=wmv2 -oac copy -o output2.avi")
 # cleanup
 
 #mencoder 'mf://*.png' -mf type=png:fps=10 -ovc lavc -lavcopts vcodec=wmv2 -oac copy  -o output.avi

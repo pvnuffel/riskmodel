@@ -34,7 +34,7 @@ import Continuer.Continuer as Continuer
 
 if __name__=="__main__":
     sigma = 1.
-    Dt = 100
+    Dt = 200
     seed = 42
     # discretization parameters
    #h=2e-2 # kde mesh width 
@@ -42,21 +42,21 @@ if __name__=="__main__":
     xL = -1.7
     xR = 1.7
     
-    a = 0.1
+    mu = 0.05 #0.5
     zeta = 0.
     alpha= 5
     beta = -1
-    lambd = scipy.array([a,sigma,alpha,beta,zeta])
+    lambd = scipy.array([mu,sigma,alpha])
             
     #SDE
     t1 = time.time()
     
     print 'Start solving sde'
-    dx = 1e-2
+    dx = 1e-2 #2e-2
 #    factor = int (dx/dx_fp)
-#    print "Discretisation for solving sde is ", factor, " times coarser than the discretisation for solving the pde"
+#    print "Discretisation for solving sde is ", factor, " times coarser than the discreti`sation for solving the pde"
     dt = 1e-2 # ti
-    N=10000
+    N=1e6
     Nlarge= N
     Nsmall =N
     
@@ -64,23 +64,16 @@ if __name__=="__main__":
     grid = scipy.arange(xL+dx/2.,xR,dx)
     rho = scipy.ones_like(grid)
     rho_left = scipy.ones(len(grid)/2)
-    rho_right= scipy.ones(len(grid)/2)/5
+    rho_right= scipy.ones(len(grid)/2)/2
 #    rho_right= scipy.zeros(len(grid)/2)
     rho =scipy.r_[rho_left, rho_right] 
     rho = rho/(sum(rho)*dx)
     print rho
 
-    
-    
-
-    v=scipy.zeros_like(grid)
-    for j in range(len(grid)): 
-        v[j]= np.sin(j*2*np.pi/len(grid))
-
-    
+     
   #  sampler_param = inv_transform.Sampler.getDefaultParameters()
   #  sampler_param['seed']=0
-  #  lifting =  inv_transform.Sampler(sampler_param)
+  #  lifting =  inv_transform.Sampler(sampler_param) print
     
     h=2e-2 # kde mesh width     
     M=1 #number of monte carlo steps                
@@ -114,6 +107,8 @@ if __name__=="__main__":
     E_Jv= scipy.zeros((nN,len(rho)))
     points = []
 
+    
+
     for m in range(1,M+1):    #M steps
         print "running with seed ", m 
         sampler_param = inv_transform.Sampler.getDefaultParameters()
@@ -142,6 +137,7 @@ if __name__=="__main__":
             print "calculate .u_Dt"
             rho_Dt = fp_sde.u_Dt 
             xmean = fp_sde.x_mean
+            np.savetxt('Newton/x_mean_N1e5_mu0p05_alpha5_Dt200', xmean)
             #rho_fine = fp_sde.make_rho_fine(rho_Dt) 
          #   rho_sq[n] = rho_sq[n] + (norm(rho_Dt))**2
             E_rho[n] = E_rho[n] + rho_Dt           #matrix
@@ -160,7 +156,7 @@ if __name__=="__main__":
                 
                         # CREATING rho = scipy.ones_like(gridLINEAR SOLVER
             gmres_param = GMRES.GMRESLinearSolver.getDefaultParameters()
-            gmres_param['tol']=1e-7
+            gmres_param['tol']=1e-5
             gmres_param['print']='short'
             gmres_param['builtin']=True
             linsolv = GMRES.GMRESLinearSolver(gmres_param)
@@ -168,10 +164,10 @@ if __name__=="__main__":
     
             # CREATING NEWTON SOLVER
             newt_param = NewtonSolver.NewtonSolver.getDefaultParameters()
-            newt_param['rel_tol']=1e-7
-            newt_param['abs_tol']=1e-7
-            newt_param['print']='short'
-            newt_param['max_iter']=4
+            newt_param['rel_tol']=1e5
+            newt_param['abs_tol']=1e-10
+            newt_param['print']='long'
+            newt_param['max_iter']=8
             nsolv = NewtonSolver.NewtonSolver(linsolv,newt_param)
             nsolv2 = NewtonSolver.NewtonSolver(linsolv2,newt_param)
     
@@ -179,23 +175,50 @@ if __name__=="__main__":
             psolver_im = ImDirect.ImplicitEulerDirectLinearSolver()
             psolver_im2 = ImDirect.ImplicitEulerDirectLinearSolver()
     
-            # POINT PARAMETERS
+            # POINT PARAMETERSpoint_param
             point_param = Point.Point.getDefaultParameters()
-            point_param['artificial']=[4]
-            point_param['artificial_condition']=[probability.condition]
+        #    point_param['artificial']=[4]
+        #    point_param['artificial_condition']=[probability.condition]
             
          #   pprev = p
-            p = Point.Point(fp_sde,nsolv,psolver_im, point_param)
-            p.correct()
-            points.append(p)
+     #       p = Point.Point(fp_sde,nsolv,None, point_param)
+      #      p.correct()
+       #     points.append(p)
 
             
-            alpha=4
-            lambd = scipy.array([a,sigma,alpha,beta,zeta])
-            fp_sde2 = particles.Particles(lifting,restriction,rho,grid, lambd, x_prev_sim, w_prev_sim, param=param )   
-            p2 = Point.Point(fp_sde2,nsolv2,psolver_im2,point_param)
-            p2.correct()
-            points.append(p2)            
+       #     alpha=4
+      #      lambd = scipy.array([a,sigma,alpha,beta,zeta])
+    #        fp_sde2 = particles.Particles(lifting,restriction,rho,grid, lambd, x_prev_sim, w_prev_sim, param=param )   
+    #        p2 = Point.Point(fp_sde2,nsolv2,psolver_im2,point_param)
+     #       p2.correct(
+       #     newton_states= nsolv.newton_states
+
+             #   np.savetxt('Newton/new_method_resnorm_Dte-2_tole-4_Ne6m%d' %m, newton_res_norms)
+                #np.savetxt('Newton/21-05_resnorm_Dte-2_tole-7_N%d' %N, newton_res_norms)
+           # States =  newton_states.reshape(nsolv.nb_newt +1, len(grid))  
+        #    norm_c = sum( np.exp( 2*(-grid**4 + grid**2)*mu/sigma**2))*dx
+       #     rho_ss = np.exp( 2*(-grid**4 + grid**2 )*mu/sigma**2) /norm_c 
+            
+                #label2= r'$\frac{ \exp{\left[-2\frac{V(x)}{\sigma^2}\right]}}{\mathcal{N}}$'         
+            #    np.savetxt('GMRES/res_Dt1e-1_dx1e-1_N%d.out' %N, linsolv.resid)
+            #    print linsolv.resid
+            #    np.savetxt('GMRES/spectrum_Dt1e-1_dx1e-1_N%d.out' %N, spectrum[0].view(float))
+              #  np.savetxt('Newton/states.out', nsolv.newton_states)
+        
+             #   residual_directsim[Dti] = norm( rho_Dt -  rho_ss)/sqrt(len(rho_Dt- rho_ss))
+             #  residual2[Dti] = norm( States[2] - rho_ss)/sqrt(len(States[2] - rho_ss))
+             #   residual1[Dti] = norm(States[1]-rho_ss)/sqrt(len(States[1] - rho_ss))
+             #   residual3[Dti] = norm(States[3]-rho_ss)/sqrt(len(States[3] - rho_ss))
+        
+        #        residual_directsim[n] = norm( rho_Dt -  rho_ss)/sqrt(len(rho_Dt- rho_ss))
+        #    for k in range(len(States)):
+         #       residual[k] = norm(States[k]-rho_ss)/sqrt(len(States[k] - rho_ss))
+                
+       #     np.savetxt('Newton/25-05_nstates_t100/25_05_residual__tol-4_t_100_N%d' %N, residual)
+       #     np.savetxt('Newton/residual_8it_N1e6',  residual)
+            np.savetxt('Newton/Newton_states_rho_ss_N1e5_alpha5_mu0p05_Dt%d' %Dt,rho_Dt)
+   
+        #    points.append(p2)            
             
             x_prev_sim = fp_sde.x_Dt
             w_prev_sim = fp_sde.w_prev
@@ -210,8 +233,8 @@ if __name__=="__main__":
       #  sq_E_Jv[n]= (norm(E_Jv[n]))**2
         
         
-    continuer_param= Continuer.Continuer.getDefaultParameters()
-    branch = Continuer.Continuer(points, continuer_param)
+  #  continuer_param= Continuer.Continuer.getDefaultParameters()
+  #  branch = Continuer.Continuer(points, continuer_param)
     #branch.bcontinue(4)
        
         
@@ -219,7 +242,7 @@ if __name__=="__main__":
 
     print "End of simulation"
     now = time.time()
-    rho = rho/(sum(rho)*dx)
+   # rho = rho/(sum(rho)*dx)
   #  print "Simulation time for solving pde: " , t1-t0, " seconds"
 
     print "Total simulation time " , now-t0, " seconds"

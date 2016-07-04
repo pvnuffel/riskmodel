@@ -116,13 +116,33 @@ class Point(scipy.sparse.linalg.LinearOperator):
     def setState(self,u,lambd):
         self.u=u
         self.lambd=lambd
-        self.system.setState(u,lambd)   # $ do we need the sampling in the contination algorithm? Uncommented
+        self.system.setState(u,lambd)  #need  to use this again for continuation       
+        #om onbegrijpelijke reden stond bovenstaande lijn initieel in commentaar waardoor het residu in Newtonsolver niet werd geupdated.
+        # this is meant to deal with preconditioner matrix that needs to be
+        # built if the state changes.
+#        if not self.precond == None:
+#            self.precond.new_build()
+#        self.solver.new_build()
+        
+#    def updateLambd(self, lambd):
+#        # self.u=u
+#        # self.lambd=lambd
+#        self.system.setState(u,lambd)  #need  to use this again for continuation
+#        # this is meant to deal with preconditioner matrix that needs to be
+#        # built if the state changes.
+#        if not self.precond == None:
+#             self.precond.new_build()
+#        self.solver.new_build()
+    def updateState(self):
+        # self.u=u
+        # self.lambd=lambd
+        u, lambd = self.getState()
+        self.system.setState(u,lambd)  #need  to use this again for continuation
         # this is meant to deal with preconditioner matrix that needs to be
         # built if the state changes.
         if not self.precond == None:
-            self.precond.new_build()
+             self.precond.new_build()
         self.solver.new_build()
-    
     def getState(self):
         """
         Returns (u,lambd)
@@ -161,6 +181,8 @@ class Point(scipy.sparse.linalg.LinearOperator):
         lambd = self.lambd
         lambd[self.param['free']]=x[n:n+l]
         lambd[self.param['artificial']]=x[n+l:]
+        print 'setstate', u
+        print 'check norm', sum(u)
         self.setState(u,lambd)
     
     def getCurrentGuess(self):
@@ -593,7 +615,11 @@ class Point(scipy.sparse.linalg.LinearOperator):
         return p
     
     def copy(self):
-        return Point(self.system,self.solver, self.param)
+       #elf.system,self.solver, self.param)
+        return Point(self.system,self.solver,self.precond, self.param)
+        
+
+
     
     def save(self,file,group,table):
         # om zeker te zijn dat het systeem in een

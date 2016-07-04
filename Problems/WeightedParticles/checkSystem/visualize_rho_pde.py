@@ -40,8 +40,7 @@ if __name__=="__main__":
     sigma =1.
     D = sigma**2
     D=1.
-    Dt = 1.
-    Dtot = 6e-1
+    Dt= 6e-1
     seed = 16
     # discretization parameters
    #h=2e-2 # kde mesh width 
